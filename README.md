@@ -1180,7 +1180,153 @@
         done
         ```
 
-3. ​
+3. **Spring加载流程**
+
+   容器是spring的核心。spring容器负责创建对象，装配他们，配置并管理他们的整个生命周期。
+
+   spring的容器一般分为bean工厂和应用上下文两种，由于bean工厂的比较低级，一般都是选择应用上下文的容器。
+
+   **应用上下文**
+
+   比较常用的几个是：
+
+   - AnnotationConfigApplicationContext：java配置类中加载spring应用上下文
+   - AnnotationConfigWebApplicationContext：java配置类中加载spring web应用上下文
+   - ClassPathXmlApplicationContext：从类路径下加载
+   - FileSystemXmlApplicationContext：从文件系统中加载
+   - XmlWebApplicationContext：从web应用下加载
+
+   **bean生命周期**
+
+   1. spring对bean实例化。
+   2. 将值和bean的引用注入到bean对应的属性中。
+      - 设置名字：如果bean实现了BeanNameAware接口，spring将bean的id传递给setBeanName方法，设置bean的名字。
+      - 设置容器：
+        - 如果bean实现了BeanFactoryAware接口，spring将BeanFactory容器实例传入。
+        - 如果bean实现了ApplicationContextAware接口，spring将应用上下文的引用传入。
+      - 调用初始化方法
+        - 如果实现了BeanPostProcessor接口，调用postProcessBeforeInitialization方法，最后还要调用postProcessAfterInitialization方法。
+        - 如果实现了InitializationBean接口，调用afterPropertiesSet方法。还有一些其他的初始化方法。。
+   3. bean已经就绪，可以被使用了。
+   4. 销毁bean。
+
+   **bean的作用域**
+
+   - 单例singleton：在整个应用中只创建一个bean实例。
+   - 原型prototype：每次注入或者通过spring上下文获取的时候，都创建一个bean实例。
+   - 会话session：在web应用中，为每个会话创建一个bean实例。
+   - 请求request：在web应用中，为每个请求创建一个bean实例。
+
+4. **spring事务的传播属性**
+
+   spring在TransactionDefinition中规定了7中类型的事务传播行为：
+
+   - REQUIRED：
+
+     默认的spring事务传播级别，使用该级别的特点是，如果上下文中已经存在事务，那么就加入到事务中执行，如果当前上下文中不存在事务，则新建事务执行。
+
+   - SUPPORTS ：
+
+     从字面意思就知道，supports，支持，该传播级别的特点是，如果上下文存在事务，则支持事务加入事务，如果没有事务，则使用非事务的方式执行。
+
+     这个通常是用来处理那些并非原子性的非核心业务逻辑操作。应用场景较少
+
+   - MANDATORY ：
+
+     该级别的事务要求上下文中必须要存在事务，否则就会抛出异常！
+
+     配置该方式的传播级别是有效的控制上下文调用代码遗漏添加事务控制的保证手段。比如一段代码不能单独被调用执行，但是一旦被调用，就必须有事务包含的情况，就可以使用这个传播级别。
+
+   - REQUIRES_NEW：
+
+     从字面即可知道，new，每次都要一个新事务。
+
+     该传播级别的特点是，每次都会新建一个事务，并且同时将上下文中的事务挂起，执行当前新建事务完成以后，上下文事务恢复再执行。
+
+     这是一个很有用的传播级别，举一个应用场景：现在有一个发送100个红包的操作，在发送之前，要做一些系统的初始化、验证、数据记录操作，然后发送100封红包，然后再记录发送日志，发送日志要求100%的准确，如果日志不准确，那么整个父事务逻辑需要回滚。
+
+     怎么处理整个业务需求呢？就是通过这个PROPAGATION_REQUIRES_NEW 级别的事务传播控制就可以完成。发送红包的子事务不会直接影响到父事务的提交和回滚。
+
+   - NOT_SUPPORTED：
+
+     这个也可以从字面得知，not supported ，不支持，当前级别的特点就是上下文中存在事务，则挂起事务，执行当前逻辑，结束后恢复上下文的事务。
+
+   - NEVER：
+
+     该事务更严格，上面一个事务传播级别只是不支持而已，有事务就挂起，而PROPAGATION_NEVER传播级别要求上下文中不能存在事务，一旦有事务，就抛出runtime异常，强制停止执行！
+
+   - NESTED：
+
+     字面也可知道，nested，嵌套级别事务。该传播级别特征是，如果上下文中存在事务，则嵌套事务执行，如果不存在事务，则新建事务。
+
+5. spring如何管理事务
+
+   **数据库事务**
+
+   数据库事务满足4个特性：
+
+   - A 原子性：一个事务的数据库操作不可分割。
+   - C 一致性：事务操作成功后，数据库所处的状态和业务规则一致。
+   - I 隔离性：并发操作时，不同的事务之间不会干扰。
+   - D 持久性：一旦事务提交成功，所有数据操作都被持久化到数据库中。
+
+   一般使用执行日志来保证ACD，用锁机制保证I。
+
+   **数据并发的问题**
+
+   - 脏读 
+
+     所谓的脏读，其实就是读到了别的事务回滚前的脏数据。比如事务B执行过程中修改了数据X，在未提交前，事务A读取了X，而事务B却回滚了，这样事务A就形成了脏读。
+
+   - 不可重复读 
+
+     不可重复读字面含义已经很明了了，比如事务A首先读取了一条数据，然后执行逻辑的时候，事务B将这条数据改变了，然后事务A再次读取的时候，发现数据不匹配了，就是所谓的不可重复读了。
+
+   - 幻读 ：
+
+     事务A首先根据条件索引得到10条数据，然后事务B改变了数据库一条数据，导致也符合事务A当时的搜索条件，这样事务A再次搜索发现有11条数据了，就产生了幻读。
+
+   **数据隔离的级别**
+
+   - Serializable ：
+
+     最严格的级别，事务串行执行，资源消耗最大；
+
+   - REPEATABLE READ ：
+
+     保证了一个事务不会修改已经由另一个事务读取但未提交（回滚）的数据。避免了“脏读取”和“不可重复读取”的情况，但是带来了更多的性能损失。
+
+   - READ COMMITTED：
+
+     大多数主流数据库的默认事务等级，保证了一个事务不会读到另一个并行事务已修改但未提交的数据，避免了“脏读取”。该级别适用于大多数系统。
+
+   - Read Uncommitted ：
+
+     保证了读取过程中不会读取到非法数据。
+
+   **spring事务管理**
+
+   spring采用声明式事务管理，提供了一致的编程模板，因此使用spring jdbc或者mybatis都可以使用统一的编程模型。
+
+   通过TransactionManager相关的实现类来委托给底层具体的持久化ORM框架来完成。
+
+6. spring怎么配置事务
+
+   **mybatis和spring jdbc**
+
+   基于数据源的Connection来访问数据库，所以使用DataSourceTransactionManager。
+
+   ```
+   <bean id="dataSource" ... />
+   <bean id="transactionManager" class="..." p:dataSource-ref="dataSource" />
+   ```
+   **Hibernate**
+
+   ```
+   <bean id="sessionFactory" ... />
+   <bean id="transactionManager" class="..." p:sessionFactory-ref="sessionFactory" />
+   ```
 
 
-   
+
+
